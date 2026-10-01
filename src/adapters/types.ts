@@ -10,4 +10,5 @@ export interface AdapterFactoryOptions {
   model?: string;
   apiKey?: string;
   baseUrl?: string;
+  timeoutMs?: number;
 }

@@ -1,7 +1,7 @@
 {
   "name": "workstream",
   "version": "0.1.0",
-  "description": "Multi-session agent orchestration harness — parallel workstreams, role routing, delivery contracts.",
+  "description": "Multi-session agent orchestration harness \u2014 parallel workstreams, role routing, delivery contracts.",
   "type": "module",
   "bin": {
     "workstream": "./dist/cli.js",
@@ -23,7 +23,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prepare": "npm run build",
-    "test": "npm run build && node --test --test-reporter=spec dist/tests/harness.test.js dist/tests/cli.test.js",
+    "test": "npm run build && node --test --test-reporter=spec dist/tests/*.test.js",
     "cli": "node dist/cli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

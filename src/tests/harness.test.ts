@@ -159,7 +159,7 @@ describe("Harness", () => {
     await mkdir(path.join(cwd, "criteria"), { recursive: true });
     await writeFile(
       path.join(cwd, criteriaRel),
-      ["# auth delivery", "text:tests pass", "file:artifacts/ok.txt"].join("\n"),
+      ["# auth delivery", 'command:["node","-e","process.exit(0)"]', "file:artifacts/ok.txt"].join("\n"),
       "utf8",
     );
 
@@ -175,19 +175,19 @@ describe("Harness", () => {
     let results = await harness.check("auth");
     assert.equal(results.length, 1);
     assert.equal(results[0]?.ok, false);
-    assert.ok(results[0]?.missing.some((m) => m.startsWith("text:")));
+    assert.ok(results[0]?.missing.some((m) => m.startsWith("command:")));
     assert.ok(results[0]?.missing.some((m) => m.startsWith("file:")));
 
     // Satisfy text via send, still missing file
     await harness.send("auth", "report: tests pass on CI");
-    results = await harness.check("auth");
+    results = await harness.check("auth", { runCommands: true });
     assert.equal(results[0]?.ok, false);
     assert.ok(results[0]?.missing.every((m) => m.startsWith("file:")));
 
     // Create required artifact
     await mkdir(path.join(cwd, "artifacts"), { recursive: true });
     await writeFile(path.join(cwd, "artifacts", "ok.txt"), "ok\n", "utf8");
-    results = await harness.check("auth");
+    results = await harness.check("auth", { runCommands: true });
     assert.equal(results[0]?.ok, true);
     assert.deepEqual(results[0]?.missing, []);
   });

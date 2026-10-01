@@ -1,3 +1,5 @@
+import { withSessionLock } from "./locking.js";
+import { setTimeout as sleep } from "node:timers/promises";
 import { randomUUID } from "node:crypto";
 import type { Adapter } from "./adapters/index.js";
 import { createAdapter } from "./adapters/index.js";
@@ -71,6 +73,11 @@ export class Harness {
   }
 
   async spawn(options: SpawnOptions): Promise<Session> {
+    await loadConfig(this.cwd);
+    return withSessionLock(options.name, this.cwd, () => this.spawnUnlocked(options));
+  }
+
+  private async spawnUnlocked(options: SpawnOptions): Promise<Session> {
     const { name, role, prompt, criteriaFile, run = true } = options;
     if (await sessionExists(name, this.cwd)) {
       throw new StorageError(
@@ -93,12 +100,16 @@ export class Harness {
     await saveSession(session, this.cwd);
 
     if (run) {
-      return this.send(name, prompt);
+      return this.sendUnlocked(name, prompt);
     }
     return session;
   }
 
-  async send(name: string, message: string): Promise<Session> {
+  async send(name: string, message: string, options: { signal?: AbortSignal } = {}): Promise<Session> {
+    return withSessionLock(name, this.cwd, () => this.sendUnlocked(name, message, options));
+  }
+
+  private async sendUnlocked(name: string, message: string, options: { signal?: AbortSignal } = {}): Promise<Session> {
     const session = await loadSession(name, this.cwd);
     const userTurn = newTurn("user", message);
     session.turns.push(userTurn);
@@ -113,6 +124,7 @@ export class Harness {
         session,
         message,
         history: session.turns.slice(0, -1),
+        signal: options.signal,
       });
       session.turns.push(newTurn("assistant", response.content));
       session.status = "idle";
@@ -146,12 +158,7 @@ export class Harness {
     name: string,
     options: { timeoutMs?: number; pollMs?: number; markOnly?: boolean } = {},
   ): Promise<Session> {
-    const session = await loadSession(name, this.cwd);
-    if (session.status !== "waiting") {
-      session.status = "waiting";
-      session.updatedAt = nowIso();
-      await saveSession(session, this.cwd);
-    }
+    const session = await this.setStatus(name, "waiting");
 
     if (options.markOnly) {
       return session;
@@ -177,11 +184,13 @@ export class Harness {
   }
 
   async setStatus(name: string, status: SessionStatus): Promise<Session> {
-    const session = await loadSession(name, this.cwd);
-    session.status = status;
-    session.updatedAt = nowIso();
-    await saveSession(session, this.cwd);
-    return session;
+    return withSessionLock(name, this.cwd, async () => {
+      const session = await loadSession(name, this.cwd);
+      session.status = status;
+      session.updatedAt = nowIso();
+      await saveSession(session, this.cwd);
+      return session;
+    });
   }
 
   async status(): Promise<{
@@ -204,22 +213,16 @@ export class Harness {
     return { config, sessions, counts };
   }
 
-  async check(name?: string): Promise<CheckResult[]> {
+  async check(name?: string, options: { runCommands?: boolean; timeoutMs?: number } = {}): Promise<CheckResult[]> {
     const sessions = name
       ? [await loadSession(name, this.cwd)]
       : await listSessions(this.cwd);
     const results: CheckResult[] = [];
     for (const session of sessions) {
-      results.push(await checkDeliveryContract(session, this.cwd));
+      results.push(await checkDeliveryContract(session, this.cwd, options));
     }
     return results;
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, ms);
-  return promise;
 }
 
 export function parseRole(value: string): Role {

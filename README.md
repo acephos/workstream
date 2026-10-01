@@ -6,10 +6,11 @@
 [![npm](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> Ship software with **many focused AI workers** instead of one overloaded chat thread.
+> Session-management MVP for named model conversations and host-verified checks. The live adapter generates text; it does not edit code or execute tools.
 
 ```bash
-npm install -g workstream   # or: npx / local clone
+git clone https://github.com/acephos/workstream
+cd workstream && npm ci && npm run build && npm link
 ws init my-project
 ws spawn --name auth --role good --prompt "Design JWT refresh flow"
 ws spawn --name ui   --role fast --prompt "Scaffold login form components"
@@ -31,9 +32,9 @@ Single-thread agent chats collapse under real product work:
 | “Done?” is vibes | Optional **delivery contracts** (`ws check`) |
 | Hard to parallelize | Named sessions you can `send` / `wait` / `list` |
 
-**workstream** is a small, local-first CLI + library that models how agent product teams actually ship: spawn workers, route by role, keep durable turn logs, and validate “done” against explicit criteria.
+**workstream** is a local CLI and library for named model conversations, role routing, durable turn logs, and explicit delivery criteria.
 
-It is a **public demonstration** of agent orchestration patterns used when shipping software with AI workers. Built by [Aniket Singh](https://github.com/acephos) while working on agentic product tooling in industry. **Not affiliated with any employer; contains no proprietary code.**
+Built by [Aniket Singh](https://github.com/acephos) as a public experiment in model-session management.
 
 ---
 
@@ -80,12 +81,12 @@ ws done codemod
 
 ### Delivery contracts
 
-Attach a criteria file when spawning. `ws check` validates it.
+Attach a criteria file when spawning. `ws check --run-checks` executes explicit JSON argv commands and writes host receipts. Without this flag commands remain unverified. `file:` checks record artifact hashes and only prove presence. Transcript text never proves completion. Missing/empty criteria fail closed.
 
 ```text
 # criteria/auth.txt
 # one criterion per line; # comments ok
-text:tests pass
+command:["npm","test"]
 file:dist/cli.js
 ```
 
@@ -95,7 +96,7 @@ ws spawn --name ship --role good \
   --criteria criteria/auth.txt
 
 ws send ship "CI green — tests pass"
-ws check ship   # FAIL until file:dist/cli.js exists, then PASS
+ws check ship --run-checks # executes the configured host check; failure or missing artifact rejects completion
 ```
 
 ---
@@ -210,7 +211,7 @@ const results = await harness.check();
 1. **Sessions are first-class** — not hidden threads inside one blob of chat history.
 2. **Filesystem is the source of truth** — inspectable JSON; no daemon required for MVP.
 3. **Adapters are swappable** — mock for CI; OpenAI-compatible HTTP for real models.
-4. **Delivery contracts are optional but real** — `file:` and `text:` criteria turn “done” into something checkable.
+4. **Delivery contracts are optional but real** — `file:` and `command:` criteria turn “done” into something checkable.
 5. **Clean-room public code** — original implementation for portfolio / open collaboration.
 
 ---
@@ -244,7 +245,7 @@ npm run typecheck
 npm run build
 ```
 
-CI runs on push/PR via GitHub Actions (Node 20 & 22).
+CI runs on push/PR via GitHub Actions (Node 20, 22, and 24).
 
 ---
 
@@ -262,10 +263,22 @@ CI runs on push/PR via GitHub Actions (Node 20 & 22).
 
 **Aniket Singh** — [github.com/acephos](https://github.com/acephos)
 
-Built as a public demonstration of multi-agent orchestration patterns used when shipping software with AI workers. Written while working on agentic product tooling in industry. **Not affiliated with NCR Voyix or any employer; no company code or proprietary IP.**
+Public experiment in named model sessions and host-verified delivery criteria.
 
 ---
 
 ## License
 
 [MIT](LICENSE) © 2026 Aniket Singh
+
+## Reliability and verification boundaries
+
+All session mutations are serialized with a local filesystem lock across CLI processes and Harness instances. Atomic snapshots use unique temporary files. A second send waits for the first to finish; separate sessions can progress independently. Locks do not support shared network filesystems. After an interrupted process, an abandoned lock fails visibly: verify no writer is active before removing the named `.lock` directory. Corrupt session files are surfaced instead of silently omitted.
+
+The live HTTP adapter times out after 60 seconds. Library callers can pass `{ signal }` to `harness.send(name, message, { signal })` to cancel a request; failure persists the user turn and error. Injected adapters must honor that signal themselves.
+
+Delivery criteria accept `file:relative/path` and `command:["executable","argument"]`. Commands never run through a shell and require `--run-checks` (or `{ runCommands: true }` in the library). Review a criteria file before enabling host commands. Checks time out after 60 seconds and store exit status, command arguments, timestamps, criteria hash, and output hash under `.workstream/evidence/`. File criteria must resolve within the workspace. Commands prove the behavior they actually test; a passing suite is not exhaustive coverage. Deprecated `text:` and bare transcript criteria fail with migration guidance.
+
+## Contributing
+
+Use a source checkout and run `npm ci`, `npm test`, and `npm run typecheck`. CI checks Node 20, 22, and 24. Changes to persistence or delivery checks should include concurrent-process, failure, and denial cases. Registry distribution is not assumed by this README; use the source-install instructions above.

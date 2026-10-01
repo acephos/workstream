@@ -13,8 +13,11 @@ export class OpenAIAdapter implements Adapter {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly model: string;
+  private readonly timeoutMs: number;
 
   constructor(options: AdapterFactoryOptions = {}) {
+    this.timeoutMs = options.timeoutMs ?? 60_000;
+    if (!Number.isFinite(this.timeoutMs) || this.timeoutMs <= 0) throw new Error("timeoutMs must be positive");
     const apiKey = options.apiKey ?? process.env.WORKSTREAM_API_KEY;
     if (!apiKey) {
       throw new Error(
@@ -35,6 +38,7 @@ export class OpenAIAdapter implements Adapter {
     const url = `${this.baseUrl}/chat/completions`;
 
     const res = await fetch(url, {
+      signal: request.signal ? AbortSignal.any([request.signal, AbortSignal.timeout(this.timeoutMs)]) : AbortSignal.timeout(this.timeoutMs),
       method: "POST",
       headers: {
         "content-type": "application/json",

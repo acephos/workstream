@@ -16,7 +16,7 @@ interface RunResult {
 }
 
 function runCli(args: string[], cwd: string): Promise<RunResult> {
-  const { promise, resolve } = Promise.withResolvers<RunResult>();
+  return new Promise<RunResult>((resolve) => {
   const child = spawn(process.execPath, [CLI, ...args], {
     cwd,
     env: {
@@ -43,7 +43,7 @@ function runCli(args: string[], cwd: string): Promise<RunResult> {
   child.on("close", (code) => {
     resolve({ code: code ?? 1, stdout, stderr });
   });
-  return promise;
+  });
 }
 
 describe("CLI integration (mock adapter)", () => {
@@ -107,7 +107,7 @@ describe("CLI integration (mock adapter)", () => {
     await mkdir(path.join(cwd, "criteria"), { recursive: true });
     await writeFile(
       path.join(cwd, "criteria", "ship.txt"),
-      "text:delivery complete\n",
+      'command:["node","-e","process.exit(0)"]\n',
       "utf8",
     );
 
@@ -135,7 +135,7 @@ describe("CLI integration (mock adapter)", () => {
     r = await runCli(["send", "shipper", "delivery complete — ready to merge"], cwd);
     assert.equal(r.code, 0, r.stderr);
 
-    r = await runCli(["check", "shipper"], cwd);
+    r = await runCli(["check", "shipper", "--run-checks"], cwd);
     assert.equal(r.code, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /PASS/);
   });

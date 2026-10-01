@@ -1,5 +1,6 @@
-import { mkdir, readFile, readdir, rename, writeFile, access } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile, access, rm } from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { Session, WorkspaceConfig } from "./types.js";
 
 export const WORKSTREAM_DIR = ".workstream";
@@ -49,12 +50,15 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-async function writeJsonAtomic(filePath: string, data: unknown): Promise<void> {
+export async function writeJsonAtomic(filePath: string, data: unknown): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
-  const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-  const body = `${JSON.stringify(data, null, 2)}\n`;
-  await writeFile(tmp, body, "utf8");
-  await rename(tmp, filePath);
+  const tmp = `${filePath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(tmp, `${JSON.stringify(data, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await rename(tmp, filePath);
+  } finally {
+    await rm(tmp, { force: true });
+  }
 }
 
 async function readJson<T>(filePath: string): Promise<T> {
@@ -142,7 +146,7 @@ export async function listSessions(cwd: string = process.cwd()): Promise<Session
       const session = await readJson<Session>(path.join(dir, entry));
       sessions.push(session);
     } catch {
-      // skip corrupt files
+      throw new StorageError(`Cannot read session ${entry}; repair or restore the corrupt file.`);
     }
   }
   sessions.sort((a, b) => a.name.localeCompare(b.name));

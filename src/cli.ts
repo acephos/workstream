@@ -17,7 +17,7 @@ Usage:
   ws list
   ws wait <name> [--timeout <ms>] [--mark-only]
   ws status
-  ws check [name]
+  ws check [name] [--run-checks]
   ws done <name>
   ws help
   ws version
@@ -174,7 +174,7 @@ async function main(argv: string[]): Promise<number> {
       }
       case "check": {
         const name = positionals[0];
-        const results = await harness.check(name);
+        const results = await harness.check(name, { runCommands: flagBool(flags, "run-checks") });
         if (results.length === 0) {
           console.log("(no sessions to check)");
           return 0;
