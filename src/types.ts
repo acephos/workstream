@@ -68,6 +68,7 @@ export interface GenerateRequest {
   session: Session;
   message: string;
   history: Turn[];
+  signal?: AbortSignal;
 }
 
 /** Adapter generation response. */
